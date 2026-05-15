@@ -1,9 +1,12 @@
-const CACHE_NAME = 'where-to-go-v1';
+const CACHE_NAME = 'where-to-go-v2';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './icon.svg'
+  './icon.svg',
+  './css/app.css?v=2',
+  './js/app.js?v=2',
+  './data/destinations.json?v=2'
 ];
 
 self.addEventListener('install', (event) => {
@@ -24,11 +27,18 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  // Don't cache wikipedia or third-party tile requests in our SW (let browser handle them)
+  if (url.origin !== location.origin) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        if (response && response.ok && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
         return response;
       })
       .catch(() => caches.match(event.request).then((r) => r || caches.match('./index.html')))

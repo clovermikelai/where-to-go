@@ -2,10 +2,9 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Where To Go</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>該去哪 · Where To Go</title>
 
-<!-- PWA -->
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0f172a">
 <meta name="application-name" content="Where To Go">
@@ -15,48 +14,100 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="該去哪">
 
-<style>
-  :root {
-    --bg: #0f172a;
-    --panel: #1e293b;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --accent: #38bdf8;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
-    text-align: center;
-  }
-  .panel {
-    background: var(--panel);
-    border-radius: 16px;
-    padding: 40px 28px;
-    max-width: 420px;
-  }
-  h1 {
-    margin: 0 0 12px;
-    font-size: 28px;
-    color: var(--accent);
-  }
-  p { color: var(--muted); line-height: 1.6; margin: 8px 0; }
-</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="./css/app.css?v=2">
 </head>
 <body>
-<div class="panel">
-  <h1>🌍 Where To Go</h1>
-  <p>地圖射飛鏢決定你的下一個旅遊目的地</p>
-  <p>專案開發中…</p>
+
+<div id="map" aria-label="地圖"></div>
+
+<header class="topbar">
+  <h1>🌍 該去哪</h1>
+  <div class="topbar-actions">
+    <button id="btn-favorites" class="icon-btn" aria-label="收藏清單" title="收藏清單">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span id="fav-count" class="badge" hidden>0</span>
+    </button>
+    <button id="btn-filters" class="icon-btn" aria-label="篩選" title="篩選">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+    </button>
+  </div>
+</header>
+
+<button id="btn-throw" class="dart-btn" aria-label="射飛鏢">
+  <span class="dart-emoji">🎯</span>
+  <span class="dart-label">射飛鏢</span>
+</button>
+
+<aside id="filter-panel" class="panel" aria-hidden="true">
+  <div class="panel-head">
+    <h2>篩選條件</h2>
+    <button class="icon-btn" data-close-panel aria-label="關閉">✕</button>
+  </div>
+  <div class="panel-body">
+    <section>
+      <label class="field-label">區域</label>
+      <div class="chip-group" id="filter-region"></div>
+    </section>
+    <section>
+      <label class="field-label">類型</label>
+      <div class="chip-group" id="filter-type"></div>
+    </section>
+    <section>
+      <label class="field-label">距離</label>
+      <div class="chip-group" id="filter-distance">
+        <button class="chip" data-distance="any" aria-pressed="true">不限</button>
+        <button class="chip" data-distance="100">100 km 內</button>
+        <button class="chip" data-distance="500">500 km 內</button>
+        <button class="chip" data-distance="2000">2000 km 內</button>
+      </div>
+      <p class="hint" id="geo-hint">距離篩選需要你的位置授權。</p>
+    </section>
+    <section class="meta-section">
+      <p class="hint" id="filter-count">符合條件：— 個地點</p>
+    </section>
+  </div>
+</aside>
+
+<aside id="favorites-panel" class="panel" aria-hidden="true">
+  <div class="panel-head">
+    <h2>我的收藏</h2>
+    <button class="icon-btn" data-close-panel aria-label="關閉">✕</button>
+  </div>
+  <div class="panel-body">
+    <ul id="favorites-list" class="fav-list"></ul>
+    <p id="favorites-empty" class="hint">尚未收藏任何地點。射飛鏢命中後可以加入收藏。</p>
+  </div>
+</aside>
+
+<div id="result-card" class="result-card" aria-hidden="true">
+  <button class="card-close icon-btn" id="btn-close-card" aria-label="關閉">✕</button>
+  <div class="card-image" id="card-image"><span class="card-image-fallback">📍</span></div>
+  <div class="card-body">
+    <div class="card-eyebrow" id="card-eyebrow">—</div>
+    <h2 class="card-title" id="card-title">—</h2>
+    <p class="card-subtitle" id="card-subtitle">—</p>
+    <p class="card-extract" id="card-extract">載入介紹中…</p>
+    <div class="card-actions">
+      <button class="btn primary" id="btn-throw-again">🎯 再丟一次</button>
+      <button class="btn" id="btn-fav-toggle">☆ 收藏</button>
+      <button class="btn" id="btn-share">↗ 分享</button>
+      <a class="btn" id="btn-open-map" target="_blank" rel="noopener">🗺 在地圖開啟</a>
+    </div>
+  </div>
 </div>
 
+<div id="dart-overlay" class="dart-overlay" aria-hidden="true">
+  <div class="dart-flying">🎯</div>
+  <div class="dart-text">瞄準中…</div>
+</div>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="./js/app.js?v=2"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

@@ -236,13 +236,46 @@ HOME="$USERPROFILE" git -c http.sslBackend=schannel \
 
 | 檔案 | 作用 |
 |---|---|
-| `index.html` | 主程式（UI + 互動邏輯） |
-| `manifest.json` | PWA 設定（App 名稱、圖示、主題色） |
-| `sw.js` | Service Worker（離線快取策略） |
+| `index.html` | 主框架（UI 結構、引入 CSS / JS） |
+| `css/app.css` | 樣式 |
+| `js/app.js` | 主邏輯（地圖、隨機抽、收藏、Wikipedia 查詢） |
+| `data/destinations.json` | 內建景點清單（離線可用） |
+| `manifest.json` | PWA 設定 |
+| `sw.js` | Service Worker（離線快取） |
 | `icon.svg` | 向量圖示 |
 | `apple-touch-icon.png` | iOS 主螢幕圖示（180×180） |
 | `.gitignore` | 排除不需上傳的本地檔案 |
 | `README.md` | 本文件 |
+
+---
+
+## 功能說明
+
+- **射飛鏢**：根據目前篩選條件隨機抽一個景點，地圖飛去該地並 pin 出 emoji
+- **篩選**：區域（11 個區）、類型（城市/古蹟/自然/山岳/海邊/美食）、距離（要授權定位）
+- **收藏清單**：localStorage 永久保存；點清單裡的項目可直接跳到該景點
+- **Wikipedia 整合**：命中後自動抓中文維基的縮圖與簡介（無需 API key）
+- **離線**：景點清單本身在 SW 快取中，沒網路也能繼續射飛鏢（只是沒有圖和簡介）
+
+## 擴充景點清單
+
+直接編輯 `data/destinations.json`，每筆格式：
+
+```json
+{
+  "id": "短代號（唯一）",
+  "name": "中文名",
+  "name_en": "English Name",
+  "country": "國家",
+  "region": "taiwan | east-asia | southeast-asia | south-asia | middle-east | europe | africa | north-america | latin-america | oceania",
+  "type": "city | culture | nature | mountain | beach | food",
+  "lat": 緯度,
+  "lon": 經度,
+  "wiki": "中文維基條目標題（用來抓圖+簡介）"
+}
+```
+
+改完記得**把 `sw.js` 的 `CACHE_NAME` 升一版**，否則手機會用舊快取。
 
 ---
 
