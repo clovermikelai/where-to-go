@@ -487,7 +487,7 @@
   }
 
   async function loadDestinations() {
-    const r = await fetch('./data/destinations.json?v=6');
+    const r = await fetch('./data/destinations.json?v=7');
     if (!r.ok) throw new Error('destinations load failed');
     state.destinations = await r.json();
   }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'where-to-go-v6';
+const CACHE_NAME = 'where-to-go-v7';
 const ASSETS = [
   './',
   './index.html',
