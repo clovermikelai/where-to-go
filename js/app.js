@@ -193,38 +193,69 @@
     const target = pickRandom(state.filtered);
     if (!target) return;
 
+    hideResult();
+    if (state.pinMarker) { state.map.removeLayer(state.pinMarker); state.pinMarker = null; }
+    await delay(260);
+
     showOverlay(true);
-    spinGlobe();
-    await delay(1300);
+    await spinTowards(target);
     showOverlay(false);
 
     state.history.push(target.id);
     state.current = target;
-    flyToAndPin(target);
+    await flyToAndPin(target);
     showResult(target);
   }
 
-  function spinGlobe() {
-    const m = state.map;
-    const start = m.getCenter();
-    const a = [start.lat - 10, start.lng + 60];
-    const b = [start.lat + 5, start.lng + 140];
-    m.flyTo(a, 2, { duration: .45 });
-    setTimeout(() => m.flyTo(b, 2, { duration: .45 }), 450);
+  function shortestLonDelta(fromLon, toLon) {
+    let d = ((toLon - fromLon + 540) % 360) - 180;
+    return d;
+  }
+
+  function spinTowards(target) {
+    return new Promise(resolve => {
+      const m = state.map;
+      const start = m.getCenter();
+      const dLon = shortestLonDelta(start.lng, target.lon);
+      const dLat = target.lat - start.lat;
+
+      const wayLat = start.lat + dLat * 0.45 + (Math.random() * 16 - 8);
+      const wayLon = start.lng + dLon * 0.55;
+      const previewLat = target.lat + (Math.random() * 14 - 7);
+      const previewLon = target.lon + (Math.random() * 14 - 7);
+
+      m.flyTo([wayLat, wayLon], 2, { duration: 0.7, easeLinearity: 0.4 });
+      setTimeout(() => {
+        m.flyTo([previewLat, previewLon], 3, { duration: 0.7, easeLinearity: 0.4 });
+      }, 720);
+      setTimeout(resolve, 1450);
+    });
   }
 
   function flyToAndPin(d) {
-    if (state.pinMarker) state.map.removeLayer(state.pinMarker);
-    state.map.flyTo([d.lat, d.lon], 6, { duration: 1.4 });
+    return new Promise(resolve => {
+      if (state.pinMarker) state.map.removeLayer(state.pinMarker);
+      state.map.flyTo([d.lat, d.lon], 6, { duration: 1.2 });
 
-    const icon = L.divIcon({
-      className: 'dest-pin-wrap',
-      html: `<div class="dest-pin">${TYPE_EMOJI[d.type] || '📍'}</div>`,
-      iconSize: [40, 40],
-      iconAnchor: [20, 36]
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        state.map.off('moveend', onEnd);
+        const icon = L.divIcon({
+          className: 'dest-pin-wrap',
+          html: `<div class="dest-pin">${TYPE_EMOJI[d.type] || '📍'}</div>`,
+          iconSize: [40, 40],
+          iconAnchor: [20, 36]
+        });
+        state.pinMarker = L.marker([d.lat, d.lon], { icon }).addTo(state.map);
+        state.pinMarker.on('click', () => showResult(d));
+        setTimeout(resolve, 380);
+      };
+      const onEnd = () => finish();
+      state.map.on('moveend', onEnd);
+      setTimeout(finish, 2000);
     });
-    state.pinMarker = L.marker([d.lat, d.lon], { icon }).addTo(state.map);
-    state.pinMarker.on('click', () => showResult(d));
   }
 
   function showResult(d) {
