@@ -31,6 +31,7 @@
   const STORAGE_FILTERS = 'wtg.filters.v1';
   const WIKI_CACHE = 'wtg.wikiCache.v1';
   const COUNTRY_CACHE = 'wtg.countryCache.v1';
+  const ONBOARD_FLAG = 'wtg.onboardSeen.v1';
 
   const COUNTRIES_GEOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
   const TOPOJSON_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js';
@@ -474,6 +475,7 @@
       else enterExploreMode();
     });
     $('#btn-exit-explore').addEventListener('click', exitExploreMode);
+    $('#btn-onboard-close').addEventListener('click', dismissOnboard);
     $$('[data-close-panel]').forEach(b => b.addEventListener('click', closePanels));
 
     document.addEventListener('keydown', e => {
@@ -485,7 +487,7 @@
   }
 
   async function loadDestinations() {
-    const r = await fetch('./data/destinations.json?v=4');
+    const r = await fetch('./data/destinations.json?v=5');
     if (!r.ok) throw new Error('destinations load failed');
     state.destinations = await r.json();
   }
@@ -690,6 +692,19 @@
     return pool;
   }
 
+  function maybeShowOnboard() {
+    if (localStorage.getItem(ONBOARD_FLAG)) return;
+    setTimeout(() => {
+      $('#onboard-tip').hidden = false;
+      $('#btn-explore').classList.add('onboard-glow');
+    }, 700);
+  }
+  function dismissOnboard() {
+    $('#onboard-tip').hidden = true;
+    $('#btn-explore').classList.remove('onboard-glow');
+    localStorage.setItem(ONBOARD_FLAG, '1');
+  }
+
   async function init() {
     loadFilters();
     initMap();
@@ -703,7 +718,13 @@
       return;
     }
     applyFilters();
+    maybeShowOnboard();
   }
+
+  // 探索按鈕被按到，也算看過引導
+  document.addEventListener('click', e => {
+    if (e.target.closest('#btn-explore')) dismissOnboard();
+  }, true);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
