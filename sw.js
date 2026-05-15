@@ -1,12 +1,17 @@
-const CACHE_NAME = 'where-to-go-v3';
+const CACHE_NAME = 'where-to-go-v4';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon.svg',
-  './css/app.css?v=2',
-  './js/app.js?v=2',
-  './data/destinations.json?v=2'
+  './apple-touch-icon.png',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './favicon-32.png',
+  './css/app.css?v=4',
+  './js/app.js?v=4',
+  './data/destinations.json?v=4'
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,7 +34,6 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  // Don't cache wikipedia or third-party tile requests in our SW (let browser handle them)
   if (url.origin !== location.origin) return;
 
   event.respondWith(

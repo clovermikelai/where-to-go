@@ -256,6 +256,7 @@ HOME="$USERPROFILE" git -c http.sslBackend=schannel \
 - **收藏清單**：localStorage 永久保存；點清單裡的項目可直接跳到該景點
 - **Wikipedia 整合**：命中後自動抓中文維基的縮圖與簡介（無需 API key）
 - **離線**：景點清單本身在 SW 快取中，沒網路也能繼續射飛鏢（只是沒有圖和簡介）
+- **探索模式（🔍）**：點 topbar 的放大鏡 → 地圖會疊上國家邊界 → 點任一國 → 從 OpenStreetMap Overpass 即時抓該國境內的景點（觀光景點、歷史古蹟、自然地標）→ 從這個池子射飛鏢。同一國第一次抓較慢，之後 7 天內快取重用。
 
 ## 擴充景點清單
 

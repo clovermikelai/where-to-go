@@ -30,6 +30,11 @@
   const STORAGE_FAV = 'wtg.favorites.v1';
   const STORAGE_FILTERS = 'wtg.filters.v1';
   const WIKI_CACHE = 'wtg.wikiCache.v1';
+  const COUNTRY_CACHE = 'wtg.countryCache.v1';
+
+  const COUNTRIES_GEOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
+  const TOPOJSON_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js';
+  const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 
   const state = {
     destinations: [],
@@ -39,9 +44,14 @@
     current: null,
     favorites: loadFavorites(),
     wikiCache: loadWikiCache(),
+    countryCache: loadCountryCache(),
     map: null,
     pinMarker: null,
-    history: []
+    history: [],
+    exploreMode: false,
+    countriesLayer: null,
+    selectedCountry: null,
+    explorePool: null
   };
 
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -60,6 +70,18 @@
   }
   function saveWikiCache() {
     localStorage.setItem(WIKI_CACHE, JSON.stringify(state.wikiCache));
+  }
+  function loadCountryCache() {
+    try { return JSON.parse(localStorage.getItem(COUNTRY_CACHE)) || {}; }
+    catch { return {}; }
+  }
+  function saveCountryCache() {
+    try {
+      localStorage.setItem(COUNTRY_CACHE, JSON.stringify(state.countryCache));
+    } catch {
+      state.countryCache = {};
+      localStorage.removeItem(COUNTRY_CACHE);
+    }
   }
   function loadFilters() {
     try {
@@ -82,8 +104,9 @@
 
   function applyFilters() {
     const { region, type, distance } = state.filters;
-    state.filtered = state.destinations.filter(d => {
-      if (region !== 'any' && d.region !== region) return false;
+    const base = (state.exploreMode && state.explorePool) ? state.explorePool : state.destinations;
+    state.filtered = base.filter(d => {
+      if (!state.exploreMode && region !== 'any' && d.region !== region) return false;
       if (type !== 'any' && d.type !== type) return false;
       if (distance !== 'any' && state.userPos) {
         const km = haversineKm(state.userPos.lat, state.userPos.lon, d.lat, d.lon);
@@ -91,7 +114,11 @@
       }
       return true;
     });
-    $('#filter-count').textContent = `符合條件：${state.filtered.length} 個地點`;
+    const countEl = $('#filter-count');
+    if (countEl) {
+      const prefix = state.exploreMode && state.selectedCountry ? `${state.selectedCountry.name}：` : '符合條件：';
+      countEl.textContent = `${prefix}${state.filtered.length} 個地點`;
+    }
   }
 
   function buildChips() {
@@ -442,6 +469,11 @@
 
     $('#btn-filters').addEventListener('click', () => openPanel('filter-panel'));
     $('#btn-favorites').addEventListener('click', () => { renderFavorites(); openPanel('favorites-panel'); });
+    $('#btn-explore').addEventListener('click', () => {
+      if (state.exploreMode) exitExploreMode();
+      else enterExploreMode();
+    });
+    $('#btn-exit-explore').addEventListener('click', exitExploreMode);
     $$('[data-close-panel]').forEach(b => b.addEventListener('click', closePanels));
 
     document.addEventListener('keydown', e => {
@@ -453,9 +485,209 @@
   }
 
   async function loadDestinations() {
-    const r = await fetch('./data/destinations.json?v=2');
+    const r = await fetch('./data/destinations.json?v=4');
     if (!r.ok) throw new Error('destinations load failed');
     state.destinations = await r.json();
+  }
+
+  // --- Explore mode: country boundaries + Overpass ---
+
+  function loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = url; s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('load fail: ' + url));
+      document.head.appendChild(s);
+    });
+  }
+
+  let countriesGeoPromise = null;
+  function loadCountriesGeo() {
+    if (countriesGeoPromise) return countriesGeoPromise;
+    countriesGeoPromise = (async () => {
+      if (typeof window.topojson === 'undefined') {
+        await loadScript(TOPOJSON_CLIENT_URL);
+      }
+      const r = await fetch(COUNTRIES_GEOJSON_URL);
+      if (!r.ok) throw new Error('countries geo failed');
+      const topo = await r.json();
+      const obj = topo.objects.countries;
+      return window.topojson.feature(topo, obj);
+    })();
+    return countriesGeoPromise;
+  }
+
+  async function enterExploreMode() {
+    if (state.exploreMode) return;
+    toast('載入國家邊界中…');
+    try {
+      const geo = await loadCountriesGeo();
+      state.exploreMode = true;
+      $('#btn-explore').classList.add('active');
+      $('#explore-banner').hidden = false;
+
+      state.countriesLayer = L.geoJSON(geo, {
+        style: () => ({
+          fillColor: '#38bdf8',
+          fillOpacity: 0.05,
+          color: 'rgba(255,255,255,0.18)',
+          weight: 0.6
+        }),
+        onEachFeature: (feature, layer) => {
+          layer.on({
+            mouseover: () => {
+              if (state.selectedCountry?.layer === layer) return;
+              layer.setStyle({ fillOpacity: 0.18, weight: 1.2, color: 'rgba(56,189,248,0.7)' });
+            },
+            mouseout: () => {
+              if (state.selectedCountry?.layer === layer) return;
+              state.countriesLayer.resetStyle(layer);
+            },
+            click: () => selectCountry(feature, layer)
+          });
+        }
+      }).addTo(state.map);
+
+      $('#explore-banner-text').textContent = '點擊地圖上的國家，從該國抓即時景點';
+      toast('探索模式已啟用：點選任一國家');
+    } catch (e) {
+      toast('載入國家邊界失敗，請檢查網路');
+    }
+  }
+
+  function exitExploreMode() {
+    if (!state.exploreMode) return;
+    state.exploreMode = false;
+    state.selectedCountry = null;
+    state.explorePool = null;
+    if (state.countriesLayer) {
+      state.map.removeLayer(state.countriesLayer);
+      state.countriesLayer = null;
+    }
+    $('#btn-explore').classList.remove('active');
+    $('#explore-banner').hidden = true;
+    applyFilters();
+  }
+
+  async function selectCountry(feature, layer) {
+    if (state.selectedCountry?.layer) {
+      state.countriesLayer.resetStyle(state.selectedCountry.layer);
+    }
+    layer.setStyle({
+      fillColor: '#38bdf8',
+      fillOpacity: 0.32,
+      color: '#38bdf8',
+      weight: 2.2
+    });
+    const name = feature.properties.name || '此國家';
+    state.selectedCountry = { feature, layer, name };
+
+    state.map.fitBounds(layer.getBounds(), { padding: [30, 30], maxZoom: 6 });
+
+    $('#explore-banner-text').textContent = `${name} · 抓取景點中…`;
+    toast(`正在抓取 ${name} 的景點…`);
+    try {
+      const pool = await fetchCountrySpots(feature, name);
+      if (!pool.length) {
+        $('#explore-banner-text').textContent = `${name} · 沒抓到景點，可關閉探索後再試`;
+        toast('該國沒抓到景點，可改換其他國家');
+        state.explorePool = null;
+        return;
+      }
+      state.explorePool = pool;
+      applyFilters();
+      $('#explore-banner-text').textContent = `${name} · ${pool.length} 個景點，按下方按鈕射飛鏢`;
+      toast(`抓到 ${pool.length} 個景點，可以射飛鏢了`);
+    } catch (e) {
+      $('#explore-banner-text').textContent = `${name} · 抓取失敗，請再試一次`;
+      toast('抓取失敗，可能 Overpass 太忙了');
+    }
+  }
+
+  function bboxOfFeature(feature) {
+    let minLon = 180, minLat = 90, maxLon = -180, maxLat = -90;
+    const visit = (coords) => {
+      if (typeof coords[0] === 'number') {
+        const [lon, lat] = coords;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      } else {
+        for (const c of coords) visit(c);
+      }
+    };
+    visit(feature.geometry.coordinates);
+    return { minLat, minLon, maxLat, maxLon };
+  }
+
+  async function fetchCountrySpots(feature, name) {
+    const cacheKey = String(feature.id || name);
+    const cached = state.countryCache[cacheKey];
+    const ONE_DAY = 24 * 3600 * 1000;
+    if (cached && (Date.now() - cached.t) < 7 * ONE_DAY) {
+      return cached.pool;
+    }
+
+    const bb = bboxOfFeature(feature);
+    // Cross-antimeridian feature: split is rare; pad slightly
+    const bbox = `${bb.minLat.toFixed(3)},${bb.minLon.toFixed(3)},${bb.maxLat.toFixed(3)},${bb.maxLon.toFixed(3)}`;
+
+    const query = `
+      [out:json][timeout:30];
+      (
+        node["tourism"~"^(attraction|viewpoint|theme_park|zoo|museum|aquarium)$"](${bbox});
+        node["historic"~"^(castle|monument|memorial|ruins|archaeological_site|fort|monastery)$"](${bbox});
+        node["natural"~"^(peak|volcano|waterfall|beach|hot_spring|cape)$"](${bbox});
+        node["leisure"="nature_reserve"](${bbox});
+      );
+      out center 250;
+    `;
+    const r = await fetch(OVERPASS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!r.ok) throw new Error('overpass ' + r.status);
+    const j = await r.json();
+
+    const pool = [];
+    const seen = new Set();
+    for (const el of j.elements || []) {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (typeof lat !== 'number' || typeof lon !== 'number') continue;
+      const tags = el.tags || {};
+      const dispName = tags['name:zh'] || tags['name:zh-Hant'] || tags['name:zh-Hans'] || tags['name:en'] || tags.name;
+      if (!dispName) continue;
+
+      const key = dispName + '@' + lat.toFixed(3) + ',' + lon.toFixed(3);
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let type = 'culture';
+      if (tags.natural === 'peak' || tags.natural === 'volcano') type = 'mountain';
+      else if (tags.natural === 'beach' || tags.natural === 'cape') type = 'beach';
+      else if (tags.natural || tags.leisure === 'nature_reserve' || tags.tourism === 'viewpoint') type = 'nature';
+      else if (tags.tourism === 'museum' || tags.tourism === 'theme_park' || tags.tourism === 'zoo' || tags.tourism === 'aquarium') type = 'culture';
+      else if (tags.historic) type = 'culture';
+
+      pool.push({
+        id: 'osm-' + el.id,
+        name: dispName,
+        name_en: tags['name:en'] || tags.name || dispName,
+        country: name,
+        region: 'any',
+        type,
+        lat, lon,
+        wiki: tags['wikipedia']?.replace(/^[a-z]+:/, '') || tags['name:zh'] || tags['name:en'] || tags.name
+      });
+    }
+
+    state.countryCache[cacheKey] = { t: Date.now(), pool };
+    saveCountryCache();
+    return pool;
   }
 
   async function init() {

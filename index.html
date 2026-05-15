@@ -17,7 +17,7 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="./css/app.css?v=3">
+<link rel="stylesheet" href="./css/app.css?v=4">
 </head>
 <body>
 
@@ -26,6 +26,9 @@
 <header class="topbar">
   <h1>🌍 該去哪</h1>
   <div class="topbar-actions">
+    <button id="btn-explore" class="icon-btn" aria-label="探索模式" title="探索模式">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    </button>
     <button id="btn-favorites" class="icon-btn" aria-label="收藏清單" title="收藏清單">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
       <span id="fav-count" class="badge" hidden>0</span>
@@ -35,6 +38,11 @@
     </button>
   </div>
 </header>
+
+<div id="explore-banner" class="explore-banner" hidden>
+  <span id="explore-banner-text">點擊地圖上的國家，從該國抓即時景點</span>
+  <button class="banner-close icon-btn" id="btn-exit-explore" aria-label="離開探索模式">✕</button>
+</div>
 
 <button id="btn-throw" class="dart-btn" aria-label="射飛鏢">
   <span class="dart-emoji">🎯</span>
@@ -108,7 +116,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="./js/app.js?v=3"></script>
+<script src="./js/app.js?v=4"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
